@@ -14,7 +14,7 @@ Components
 
 Common VCC - arduino 5v pin, common GND - arduino GND pin.
 
-Display connection: SDA to A4 pin, SCK to A5 pin, VDD to common VCC, GND to common GND.
+Display connection: SDA to A4 pin, SCK to A5 pin, VDD to 3v3 pin, GND to common GND.
 
 MQ135 connection: A0 to A0 pin, VCC to common VCC pin, GND to common GND pin.
 
@@ -24,4 +24,4 @@ Button: connection: to D2 pin and GND pin.
 
 ## Assembly
 
-See instructions at my website.
+See [instructions at my website](https://aleksandr.ru/blog/domashniy_co2_metr).
