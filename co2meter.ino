@@ -1,22 +1,28 @@
-#include <EEPROM.h>
-#include <DHT.h>
-#include <MQ135.h>
-#include <iarduino_OLED.h>   
+/**
+ * CO2 meter by Aleksandr.ru
+ * @see https://aleksandr.ru/blog/domashniy_co2_metr
+ */
+ 
+#include <EEPROM.h> // builtin
+#include <DHT.h> // https://github.com/adafruit/DHT-sensor-library
+#include <MQ135.h> // https://github.com/Phoenix1747/MQ135
+#include <iarduino_OLED.h> // https://iarduino.ru/file/340.html
+#include <PinButton.h> // https://github.com/poelstra/arduino-multi-button/
 
-// #define DEBUG 9600
+// #define DEBUG 9600 // serial port speed  for debug data
 
 #define BUTTON_PIN 9
-
 #define DHT_PIN 2
 #define MQ_PIN A0
 #define MQ_RZERO 53.35 // 76.63 default https://github.com/GeorgK/MQ135/blob/master/MQ135.h#L27
-#define MQ_RLOAD 1.0
-#define OLED_ADDR 0x3C
-#define RZERO_ADDR 0
+#define MQ_RLOAD 1.0 // kOhm
+#define OLED_ADDR 0x3C // I2C
+#define RZERO_ADDR 0 // EEPROM
 
-#define NUM_MEASURES 64
+#define NUM_MEASURES 32 // >= GRAPTH_NUM_COLS
+#define NUM_AVG_PPM 36 // x2 sec. to graph col
 #define CALIBRATION_SEC 43200
-#define NUM_INTERVALS 3
+#define NUM_INTERVALS 2
 
 #define SMALL_ROW 10
 #define MEDIUM_ROW 16
@@ -24,10 +30,13 @@
 
 #define GRAPH_MIN 300
 #define GRAPH_MAX 999
+#define GRAPH_COL_WIDTH 5
+#define GRAPTH_NUM_COLS floor(128 / GRAPH_COL_WIDTH) // 25
 
 DHT myDht(DHT_PIN, DHT11);
 MQ135 myMq(MQ_PIN, MQ_RZERO, MQ_RLOAD);
 iarduino_OLED myOled(OLED_ADDR);
+PinButton myButton(BUTTON_PIN);
 
 extern uint8_t SmallFontRus[];
 extern uint8_t BigNumbers[];
@@ -35,6 +44,9 @@ extern uint8_t BigNumbers[];
 float rZero = 0.00f;
 float temperature = 0.00f;
 float humidity = 0.00f;
+float ppm = 0.00f;
+float avg_ppm = 0.00f;
+byte avg_ppm_count = 0;
 float measurements[NUM_MEASURES];
 float lowMeasure = 0.00f;
 float highMeasure = 0.00f;
@@ -47,8 +59,7 @@ struct INTERVAL {
 };
 INTERVAL intervals[NUM_INTERVALS] = {
       {1000, 0, false},
-      {2000, 0, false},
-      {250,  0, false}
+      {2000, 0, false}
 };
 
 void setup()
@@ -109,6 +120,8 @@ void setup_normal()
 
 void loop()
 {  
+      myButton.update();
+      
       for (byte i = 0; i < NUM_INTERVALS; i++) {
             if(millis() >= intervals[i].last + intervals[i].step) {
                   intervals[i].last += intervals[i].step;
@@ -169,11 +182,9 @@ void loop_calibration()
 
 void loop_normal()
 {
-      if (intervals[0].active) {
-            if (!digitalRead(BUTTON_PIN)) {
-                  displayMode = !displayMode;
-                  display_data();
-            }
+      if (myButton.isClick()) {
+            displayMode = !displayMode;
+            display_data();
       }
       
       if (intervals[0].active) {
@@ -182,15 +193,28 @@ void loop_normal()
 
       if (intervals[1].active) {
             if (temperature && humidity) {
-                  push_measure(myMq.getCorrectedPPM(temperature, humidity), highMeasure, lowMeasure);
+                  ppm = myMq.getCorrectedPPM(temperature, humidity);
             }
             else {
-                  push_measure(myMq.getPPM(), highMeasure, lowMeasure);
+                  ppm = myMq.getPPM();
             }
+
+            avg_ppm += ppm;
+            if (avg_ppm_count++) avg_ppm = avg_ppm / 2;
+            if (avg_ppm_count >= NUM_AVG_PPM) {
+                  #ifdef DEBUG
+                  Serial.print(F("Adding PPM: ")); Serial.println(avg_ppm, DEC);
+                  #endif
+                  push_measure(avg_ppm, highMeasure, lowMeasure);
+                  avg_ppm = 0.00f;
+                  avg_ppm_count = 0;
+            }
+
             #ifdef DEBUG
             Serial.print(F("Temp: ")); Serial.print(temperature, DEC);
             Serial.print(F(" Humidity: ")); Serial.print(humidity, DEC);
-            Serial.print(F(" CO2 PPM: ")); Serial.println(ppm, DEC);          
+            Serial.print(F(" CO2 PPM: ")); Serial.print(ppm, DEC);
+            Serial.print(F(" Avg PPM: ")); Serial.println(avg_ppm, DEC);      
             #endif
 
             display_data();
@@ -199,7 +223,6 @@ void loop_normal()
 
 void display_data()
 {
-      float ppm = measurements[NUM_MEASURES - 1];
       bool alarm = ppm > GRAPH_MAX;
 
       myOled.clrScr();  
@@ -224,15 +247,21 @@ void display_data()
             myOled.print(round(ppm), 128-SMALL_COL*7, SMALL_ROW); 
             myOled.print(F("PPM"), 128-SMALL_COL*3, SMALL_ROW);
             
-            const byte colWidth = 5;
-            byte maxCols = floor(128/colWidth);
-            for(byte c = 0; c < maxCols; c++) {
-                  byte i = NUM_MEASURES - maxCols + c;
-                  float measure = constrain(measurements[i], GRAPH_MIN, GRAPH_MAX);
-                  byte colHeight = map(measure, GRAPH_MIN, GRAPH_MAX, 1, 64-SMALL_ROW*1.5);
-                  myOled.drawRect(c*colWidth, 64-colHeight , (c+1)*colWidth - 3, 64, true, 1);
+            float measure;
+            byte colHeight;
+            byte c;
+            for(c = 0; c < GRAPTH_NUM_COLS; c++) {
+                  byte i = NUM_MEASURES - GRAPTH_NUM_COLS + c;
+                  if (measurements[i]) {
+                        measure = constrain(measurements[i], GRAPH_MIN, GRAPH_MAX);
+                        colHeight = map(measure, GRAPH_MIN, GRAPH_MAX, 1, 64-SMALL_ROW*1.5);
+                        myOled.drawRect(c*GRAPH_COL_WIDTH, 64-colHeight , (c+1)*GRAPH_COL_WIDTH-3, 64, true, 1);
+                  }
             }
-            
+
+            measure = constrain(ppm, GRAPH_MIN, GRAPH_MAX);
+            colHeight = map(measure, GRAPH_MIN, GRAPH_MAX, 1, 64-SMALL_ROW*1.5);
+            myOled.drawRect(c*GRAPH_COL_WIDTH, 64-colHeight , (c+1)*GRAPH_COL_WIDTH-3, 64, true, 1);
       }
       myOled.update();
 }
