@@ -1,6 +1,16 @@
 # DIY CO2 meter and grapher for home and office use
 
-Components
+![CO2 meter](https://aleksandr.ru/sitefiles/338/P20223-151350.jpg)
+
+## Features
+
+- display current CO2 level, temperature and humidity
+- display historical graph of CO2 level for last 30 minutes
+- switch to large display of CO2 level
+- alarm when CO2 exceeds limit of 1000 ppm
+- self calibration with countdown display
+
+## Components
 
 - Arduino nano
 - 0.96" OLED display
