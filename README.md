@@ -34,4 +34,4 @@ Button: connection: to D2 pin and GND pin.
 
 ## Assembly
 
-See [instructions at my website](https://aleksandr.ru/blog/domashniy_co2_metr).
+See instructions at my website [in Russian](https://aleksandr.ru/blog/domashniy_co2_metr) or [translated to English](https://aleksandr-ru.translate.goog/blog/domashniy_co2_metr?_x_tr_sl=ru&_x_tr_tl=en&_x_tr_hl=ru&_x_tr_pto=wapp).
