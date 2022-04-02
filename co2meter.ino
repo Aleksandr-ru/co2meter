@@ -229,12 +229,17 @@ void display_data()
       if (alarm || displayMode) {
             myOled.invScr(alarm && millis() / 1000 % 4);
             myOled.setFont(BigNumbers); 
-            if (ppm > 1000) myOled.print(round(ppm), 64 - 32, 44);
-            else            myOled.print(round(ppm), 64 - 21, 44);
+            if (ppm > 1000) myOled.print(round(ppm), 64 - 32, 46);
+            else            myOled.print(round(ppm), 64 - 21, 46);
             
             myOled.setFont(SmallFontRus); 
-            myOled.print(F("CO2"), 64-SMALL_COL*3/2, SMALL_ROW);
-            myOled.print(F("PPM"), 64-SMALL_COL*3/2, 64);                 
+            myOled.print(F("CO2 PPM"), 64-SMALL_COL*7/2, SMALL_ROW);
+
+            myOled.print(round(humidity), 0, 64); 
+            myOled.print(F("%"), SMALL_COL*3, 64); 
+                              
+            myOled.print(round(temperature), 128-SMALL_COL*4, 64); 
+            myOled.print(F("C"), 128-SMALL_COL, 64); 
       }
       else {   
             myOled.invScr(false);               
