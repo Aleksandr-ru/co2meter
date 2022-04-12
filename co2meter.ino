@@ -9,7 +9,7 @@
 #include <iarduino_OLED.h> // https://iarduino.ru/file/340.html
 #include <PinButton.h> // https://github.com/poelstra/arduino-multi-button/
 
-// #define DEBUG 9600 // serial port speed  for debug data
+// #define DEBUG 9600 // serial port speed for debug data
 
 #define BUTTON_PIN 9
 #define DHT_PIN 2
@@ -76,7 +76,7 @@ void setup()
       myOled.begin(); 
       myOled.autoUpdate(false);  
       myOled.setFont(SmallFontRus); 
-      myOled.print("aleksandr.ru", 64-SMALL_COL*6, 32+SMALL_ROW/2);
+      myOled.print(F("aleksandr.ru"), 64-SMALL_COL*6, 32+SMALL_ROW/2);
       myOled.update();
 
       EEPROM.get(RZERO_ADDR, rZero);
@@ -85,25 +85,28 @@ void setup()
             Serial.println(F("EEPROM rZero malformed, using default, calibration required!"));
             #endif
             rZero = MQ_RZERO;
+            myOled.print(F("CALIBRATION REQUIRED"), 64-SMALL_COL*10, SMALL_ROW);
+            myOled.update();
+            delay(5000);
       }
       else {
             #ifdef DEBUG
             Serial.print(F("EEPROM rZero: "));
             Serial.println(rZero, DEC);
             #endif
+            delay(1000);
       }
 
       calibrationMode = !digitalRead(BUTTON_PIN);
       if (calibrationMode) setup_calibration();
       else setup_normal();
-
-      delay(1000);
 }    
 
 void setup_calibration()
 {
       myMq = MQ135(MQ_PIN, rZero, MQ_RLOAD);
       init_measurements();
+      rZero = 0;
 
       myOled.clrScr();  
       myOled.print(F("Temp C:"), 0, MEDIUM_ROW);
@@ -148,7 +151,6 @@ void loop_calibration()
 
       if (intervals[1].active) {
             if (sec >= CALIBRATION_SEC) {
-                  rZero = avg_measure();
                   EEPROM.put(RZERO_ADDR, rZero);
 
                   #ifdef DEBUG
@@ -171,6 +173,15 @@ void loop_calibration()
                   #endif
 
                   if (rzero && !isinf(rzero)) push_measure(rzero, highMeasure, lowMeasure);
+                  if (measurements[0] != 0) {
+                    if (rZero) rZero = (rZero + avg_measure()) / 2;
+                    else rZero = avg_measure();
+                    init_measurements();
+                    #ifdef DEBUG
+                    Serial.print(F("New AVG rZero: ")); 
+                    Serial.println(rZero, DEC);                
+                    #endif
+                  }
 
                   myOled.print(temperature, 64, MEDIUM_ROW);
                   myOled.print(humidity, 64, MEDIUM_ROW*2);
